@@ -1,31 +1,5 @@
-```typescript
 /**
  * Agent Visibility Worker + WhatsApp Business AI
- *
- * Existing Agent Visibility surfaces:
- *   GET /llms.txt
- *   GET /llms-full.txt
- *   GET /index.json
- *   GET /:slug.md
- *   GET /:slug.jsonld
- *   GET /jsonld
- *   GET /robots.txt
- *
- * Existing API:
- *   GET  /api/site
- *   GET  /api/resources
- *   GET  /api/resources/:slug
- *   POST /api/resources
- *   POST /api/refresh
- *
- * WhatsApp:
- *   GET  /webhook
- *   POST /webhook
- *
- * Firebase / Firestore:
- *   Business: businesses/{BUSINESS_ID}
- *   Products: products where ownerId == BUSINESS_ID
- *   Orders: orders
  */
 
 import { Hono } from "hono";
@@ -58,10 +32,6 @@ import {
 
 const app = new Hono<{ Bindings: Env }>();
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const FIREBASE_PROJECT_ID = "xcoinsfree";
 
 const MAX_BODY_BYTES = 100_000;
@@ -69,9 +39,9 @@ const MAX_RESOURCES = 100;
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,62})$/;
 
-// ---------------------------------------------------------------------------
-// Generic JSON response
-// ---------------------------------------------------------------------------
+// ============================================================================
+// GENERIC JSON
+// ============================================================================
 
 function json(data: unknown, status = 200): Response {
 	return new Response(JSON.stringify(data), {
@@ -82,23 +52,30 @@ function json(data: unknown, status = 200): Response {
 	});
 }
 
-// ---------------------------------------------------------------------------
-// Error handler
-// ---------------------------------------------------------------------------
+// ============================================================================
+// ERROR HANDLER
+// ============================================================================
 
 app.onError((err, c) => {
-	console.error(`[Error] ${c.req.method} ${c.req.path}: ${err.message}`);
+	console.error(
+		`[Error] ${c.req.method} ${c.req.path}: ${err.message}`,
+	);
 
 	if (/\.(md|txt)$/.test(c.req.path)) {
 		return c.text("Internal server error", 500);
 	}
 
-	return c.json({ error: "Internal server error" }, 500);
+	return c.json(
+		{
+			error: "Internal server error",
+		},
+		500,
+	);
 });
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// ============================================================================
+// HELPERS
+// ============================================================================
 
 function originOf(url: string): string {
 	return new URL(url).origin;
@@ -106,19 +83,29 @@ function originOf(url: string): string {
 
 function isAuthorized(c: {
 	env: Env;
-	req: { header: (k: string) => string | undefined };
+	req: {
+		header: (name: string) => string | undefined;
+	};
 }): boolean {
 	const configured = c.env.ADMIN_TOKEN;
 
-	if (!configured) return false;
+	if (!configured) {
+		return false;
+	}
 
 	const header = c.req.header("authorization") ?? "";
-	const token = header.replace(/^Bearer\s+/i, "");
+
+	const token = header.replace(
+		/^Bearer\s+/i,
+		"",
+	);
 
 	return token.length > 0 && token === configured;
 }
 
-function contentSignal(c: { env: Env }): Record<string, string> {
+function contentSignal(c: {
+	env: Env;
+}): Record<string, string> {
 	return {
 		"Content-Signal":
 			c.env.CONTENT_SIGNAL ||
@@ -126,9 +113,9 @@ function contentSignal(c: { env: Env }): Record<string, string> {
 	};
 }
 
-// ---------------------------------------------------------------------------
+// ============================================================================
 // CORS
-// ---------------------------------------------------------------------------
+// ============================================================================
 
 app.use("/llms.txt", cors());
 app.use("/llms-full.txt", cors());
@@ -138,40 +125,60 @@ app.use("/jsonld", cors());
 app.use("/:file{.+\\.md}", cors());
 app.use("/:file{.+\\.jsonld}", cors());
 
-// ---------------------------------------------------------------------------
-// Agent Visibility surfaces
-// ---------------------------------------------------------------------------
+// ============================================================================
+// AGENT VISIBILITY
+// ============================================================================
 
 app.get("/llms.txt", async (c) => {
-	const site = siteConfig(c.env, originOf(c.req.url));
+	const site = siteConfig(
+		c.env,
+		originOf(c.req.url),
+	);
+
 	const resources = await getResources(c.env);
 
 	return c.text(
-		renderLlmsTxt({ site, resources }),
+		renderLlmsTxt({
+			site,
+			resources,
+		}),
 		200,
 		{
-			"Content-Type": "text/plain; charset=utf-8",
+			"Content-Type":
+				"text/plain; charset=utf-8",
 			...contentSignal(c),
 		},
 	);
 });
 
 app.get("/llms-full.txt", async (c) => {
-	const site = siteConfig(c.env, originOf(c.req.url));
+	const site = siteConfig(
+		c.env,
+		originOf(c.req.url),
+	);
+
 	const resources = await getResources(c.env);
 
 	return c.text(
-		renderLlmsFullTxt({ site, resources }),
+		renderLlmsFullTxt({
+			site,
+			resources,
+		}),
 		200,
 		{
-			"Content-Type": "text/plain; charset=utf-8",
+			"Content-Type":
+				"text/plain; charset=utf-8",
 			...contentSignal(c),
 		},
 	);
 });
 
 app.get("/index.json", async (c) => {
-	const site = siteConfig(c.env, originOf(c.req.url));
+	const site = siteConfig(
+		c.env,
+		originOf(c.req.url),
+	);
+
 	const resources = await getResources(c.env);
 
 	c.header(
@@ -180,12 +187,19 @@ app.get("/index.json", async (c) => {
 	);
 
 	return c.json(
-		renderIndexJson({ site, resources }),
+		renderIndexJson({
+			site,
+			resources,
+		}),
 	);
 });
 
 app.get("/robots.txt", async (c) => {
-	const site = siteConfig(c.env, originOf(c.req.url));
+	const site = siteConfig(
+		c.env,
+		originOf(c.req.url),
+	);
+
 	const resources = await getResources(c.env);
 
 	return c.text(
@@ -197,14 +211,19 @@ app.get("/robots.txt", async (c) => {
 		}),
 		200,
 		{
-			"Content-Type": "text/plain; charset=utf-8",
+			"Content-Type":
+				"text/plain; charset=utf-8",
 			...contentSignal(c),
 		},
 	);
 });
 
 app.get("/jsonld", async (c) => {
-	const site = siteConfig(c.env, originOf(c.req.url));
+	const site = siteConfig(
+		c.env,
+		originOf(c.req.url),
+	);
+
 	const resources = await getResources(c.env);
 
 	return c.json(
@@ -221,16 +240,20 @@ app.get("/jsonld", async (c) => {
 	);
 });
 
-// ---------------------------------------------------------------------------
-// Per-page Markdown
-// ---------------------------------------------------------------------------
+// ============================================================================
+// MARKDOWN RESOURCE
+// ============================================================================
 
 app.get("/:file{.+\\.md}", async (c) => {
 	const slug = c.req
 		.param("file")
 		.replace(/\.md$/, "");
 
-	const site = siteConfig(c.env, originOf(c.req.url));
+	const site = siteConfig(
+		c.env,
+		originOf(c.req.url),
+	);
+
 	const resources = await getResources(c.env);
 
 	const resource = resources.find(
@@ -255,16 +278,20 @@ app.get("/:file{.+\\.md}", async (c) => {
 	);
 });
 
-// ---------------------------------------------------------------------------
-// Per-page JSON-LD
-// ---------------------------------------------------------------------------
+// ============================================================================
+// JSON-LD RESOURCE
+// ============================================================================
 
 app.get("/:file{.+\\.jsonld}", async (c) => {
 	const slug = c.req
 		.param("file")
 		.replace(/\.jsonld$/, "");
 
-	const site = siteConfig(c.env, originOf(c.req.url));
+	const site = siteConfig(
+		c.env,
+		originOf(c.req.url),
+	);
+
 	const resources = await getResources(c.env);
 
 	const resource = resources.find(
@@ -289,9 +316,9 @@ app.get("/:file{.+\\.jsonld}", async (c) => {
 	);
 });
 
-// ---------------------------------------------------------------------------
-// Existing JSON API
-// ---------------------------------------------------------------------------
+// ============================================================================
+// EXISTING API
+// ============================================================================
 
 app.get("/api/site", async (c) => {
 	const site = siteConfig(
@@ -358,7 +385,9 @@ app.get("/api/resources/:slug", async (c) => {
 
 	if (!resource) {
 		return c.json(
-			{ error: "Not found" },
+			{
+				error: "Not found",
+			},
 			404,
 		);
 	}
@@ -419,8 +448,7 @@ app.post("/api/resources", async (c) => {
 		);
 	}
 
-	let url =
-		`${originOf(c.req.url)}/${slug}`;
+	let url = `${originOf(c.req.url)}/${slug}`;
 
 	if (body.url) {
 		try {
@@ -434,8 +462,7 @@ app.post("/api/resources", async (c) => {
 			) {
 				return c.json(
 					{
-						error:
-							"url must be http(s).",
+						error: "url must be http(s).",
 					},
 					400,
 				);
@@ -445,8 +472,7 @@ app.post("/api/resources", async (c) => {
 		} catch {
 			return c.json(
 				{
-					error:
-						"url is not a valid URL.",
+					error: "url is not a valid URL.",
 				},
 				400,
 			);
@@ -463,12 +489,11 @@ app.post("/api/resources", async (c) => {
 	};
 
 	try {
-		const enriched =
-			await upsertResource(
-				c.env,
-				raw,
-				MAX_RESOURCES,
-			);
+		const enriched = await upsertResource(
+			c.env,
+			raw,
+			MAX_RESOURCES,
+		);
 
 		return c.json(
 			enriched,
@@ -512,9 +537,9 @@ app.post("/api/refresh", async (c) => {
 	});
 });
 
-// ===========================================================================
+// ============================================================================
 // FIREBASE / FIRESTORE
-// ===========================================================================
+// ============================================================================
 
 interface FirebaseServiceAccount {
 	project_id: string;
@@ -529,9 +554,11 @@ interface FirestoreValue {
 	booleanValue?: boolean;
 	timestampValue?: string;
 	nullValue?: null;
+
 	mapValue?: {
 		fields?: Record<string, FirestoreValue>;
 	};
+
 	arrayValue?: {
 		values?: FirestoreValue[];
 	};
@@ -542,32 +569,6 @@ interface FirestoreDocument {
 	fields?: Record<string, FirestoreValue>;
 	createTime?: string;
 	updateTime?: string;
-}
-
-function firestoreString(
-	value?: FirestoreValue,
-): string | undefined {
-	return value?.stringValue;
-}
-
-function firestoreNumber(
-	value?: FirestoreValue,
-): number | undefined {
-	if (value?.integerValue !== undefined) {
-		return Number(value.integerValue);
-	}
-
-	if (value?.doubleValue !== undefined) {
-		return Number(value.doubleValue);
-	}
-
-	return undefined;
-}
-
-function firestoreBoolean(
-	value?: FirestoreValue,
-): boolean | undefined {
-	return value?.booleanValue;
 }
 
 function firestoreToObject(
@@ -582,7 +583,7 @@ function firestoreToObject(
 	for (const [key, value] of Object.entries(fields)) {
 		if (value.stringValue !== undefined) {
 			result[key] = value.stringValue;
-		} else if (
+	} else if (
 			value.integerValue !== undefined
 		) {
 			result[key] = Number(
@@ -599,8 +600,7 @@ function firestoreToObject(
 		} else if (
 			value.timestampValue !== undefined
 		) {
-			result[key] =
-				value.timestampValue;
+			result[key] = value.timestampValue;
 		} else if (
 			value.nullValue === null
 		) {
@@ -618,15 +618,57 @@ function firestoreToObject(
 			result[key] =
 				(value.arrayValue.values ?? [])
 					.map((item) =>
-						firestoreToObject({
-							value: item,
-						}),
-					)
-					.map((obj) => obj.value);
+						firestoreValueToPlain(
+							item,
+						),
+					);
 		}
 	}
 
 	return result;
+}
+
+function firestoreValueToPlain(
+	value: FirestoreValue,
+): unknown {
+	if (value.stringValue !== undefined) {
+		return value.stringValue;
+	}
+
+	if (value.integerValue !== undefined) {
+		return Number(value.integerValue);
+	}
+
+	if (value.doubleValue !== undefined) {
+		return value.doubleValue;
+	}
+
+	if (value.booleanValue !== undefined) {
+		return value.booleanValue;
+	}
+
+	if (value.timestampValue !== undefined) {
+		return value.timestampValue;
+	}
+
+	if (value.nullValue === null) {
+		return null;
+	}
+
+	if (value.mapValue) {
+		return firestoreToObject(
+			value.mapValue.fields,
+		);
+	}
+
+	if (value.arrayValue) {
+		return (value.arrayValue.values ?? []).map(
+			(item) =>
+				firestoreValueToPlain(item),
+		);
+	}
+
+	return null;
 }
 
 function firestoreValue(
@@ -647,8 +689,7 @@ function firestoreValue(
 	if (typeof value === "number") {
 		if (Number.isInteger(value)) {
 			return {
-				integerValue:
-					String(value),
+				integerValue: String(value),
 			};
 		}
 
@@ -666,10 +707,9 @@ function firestoreValue(
 	if (Array.isArray(value)) {
 		return {
 			arrayValue: {
-				values:
-					value.map(
-						firestoreValue,
-					),
+				values: value.map(
+					firestoreValue,
+				),
 			},
 		};
 	}
@@ -705,12 +745,15 @@ function firestoreValue(
 	};
 }
 
-// ---------------------------------------------------------------------------
-// Base64 helpers
-// ---------------------------------------------------------------------------
+// ============================================================================
+// BASE64
+// ============================================================================
 
 function base64UrlEncode(
-	data: ArrayBuffer | Uint8Array | string,
+	data:
+		| ArrayBuffer
+		| Uint8Array
+		| string,
 ): string {
 	let bytes: Uint8Array;
 
@@ -756,7 +799,11 @@ function pemToArrayBuffer(
 		binary.length,
 	);
 
-	for (let i = 0; i < binary.length; i++) {
+	for (
+		let i = 0;
+		i < binary.length;
+		i++
+	) {
 		bytes[i] =
 			binary.charCodeAt(i);
 	}
@@ -764,9 +811,9 @@ function pemToArrayBuffer(
 	return bytes.buffer;
 }
 
-// ---------------------------------------------------------------------------
-// Firebase OAuth token
-// ---------------------------------------------------------------------------
+// ============================================================================
+// FIREBASE OAUTH
+// ============================================================================
 
 async function getFirebaseAccessToken(
 	env: Env,
@@ -780,10 +827,18 @@ async function getFirebaseAccessToken(
 		);
 	}
 
-	const serviceAccount =
-		JSON.parse(
-			raw,
-		) as FirebaseServiceAccount;
+	let serviceAccount: FirebaseServiceAccount;
+
+	try {
+		serviceAccount =
+			JSON.parse(
+				raw,
+			) as FirebaseServiceAccount;
+	} catch {
+		throw new Error(
+			"FIREBASE_SERVICE_ACCOUNT_JSON is invalid JSON",
+		);
+	}
 
 	const now =
 		Math.floor(
@@ -796,13 +851,16 @@ async function getFirebaseAccessToken(
 	};
 
 	const claim = {
-		iss:
-			serviceAccount.client_email,
+		iss: serviceAccount.client_email,
+
 		scope:
 			"https://www.googleapis.com/auth/datastore",
+
 		aud:
 			"https://oauth2.googleapis.com/token",
+
 		iat: now,
+
 		exp: now + 3600,
 	};
 
@@ -826,7 +884,8 @@ async function getFirebaseAccessToken(
 				serviceAccount.private_key,
 			),
 			{
-				name: "RSASSA-PKCS1-v1_5",
+				name:
+					"RSASSA-PKCS1-v1_5",
 				hash: "SHA-256",
 			},
 			false,
@@ -850,10 +909,12 @@ async function getFirebaseAccessToken(
 			"https://oauth2.googleapis.com/token",
 			{
 				method: "POST",
+
 				headers: {
 					"Content-Type":
 						"application/x-www-form-urlencoded",
 				},
+
 				body:
 					"grant_type=" +
 					encodeURIComponent(
@@ -887,9 +948,9 @@ async function getFirebaseAccessToken(
 	return tokenData.access_token;
 }
 
-// ---------------------------------------------------------------------------
-// Firestore request
-// ---------------------------------------------------------------------------
+// ============================================================================
+// FIRESTORE REQUEST
+// ============================================================================
 
 async function firestoreRequest(
 	env: Env,
@@ -903,20 +964,23 @@ async function firestoreRequest(
 		`https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${path}`,
 		{
 			...options,
+
 			headers: {
 				Authorization:
 					`Bearer ${token}`,
+
 				"Content-Type":
 					"application/json",
+
 				...(options.headers ?? {}),
 			},
 		},
 	);
 }
 
-// ---------------------------------------------------------------------------
-// Business
-// ---------------------------------------------------------------------------
+// ============================================================================
+// BUSINESS
+// ============================================================================
 
 async function getBusinessDocument(
 	businessId: string,
@@ -951,9 +1015,9 @@ async function getBusinessDocument(
 	);
 }
 
-// ===========================================================================
+// ============================================================================
 // PRODUCTS
-// ===========================================================================
+// ============================================================================
 
 interface Product {
 	id: string;
@@ -977,6 +1041,7 @@ async function getBusinessProducts(
 			"documents:runQuery",
 			{
 				method: "POST",
+
 				body: JSON.stringify({
 					structuredQuery: {
 						from: [
@@ -985,20 +1050,24 @@ async function getBusinessProducts(
 									"products",
 							},
 						],
+
 						where: {
 							fieldFilter: {
 								field: {
 									fieldPath:
 										"ownerId",
 								},
+
 								op:
 									"EQUAL",
+
 								value: {
 									stringValue:
 										businessId,
 								},
 							},
 						},
+
 						limit: 200,
 					},
 				}),
@@ -1022,7 +1091,9 @@ async function getBusinessProducts(
 	const products: Product[] = [];
 
 	for (const row of rows) {
-		if (!row.document) continue;
+		if (!row.document) {
+			continue;
+		}
 
 		const data =
 			firestoreToObject(
@@ -1037,53 +1108,61 @@ async function getBusinessProducts(
 		const name =
 			String(
 				data.name ??
-				data.title ??
-				"Product",
+					data.title ??
+					"Product",
 			);
 
 		const price =
 			Number(
 				data.price ??
-				data.amount ??
-				0,
+					data.amount ??
+					0,
 			);
 
 		const stock =
 			Number(
 				data.stock ??
-				data.quantity ??
-				0,
+					data.quantity ??
+					0,
 			);
 
 		products.push({
 			id,
+
 			businessId:
 				data.businessId
 					? String(
 							data.businessId,
 						)
 					: undefined,
+
 			ownerId:
 				data.ownerId
 					? String(
 							data.ownerId,
 						)
 					: undefined,
+
 			name,
+
 			description:
 				data.description
 					? String(
 							data.description,
 						)
 					: undefined,
+
 			price,
+
 			stock,
+
 			category:
 				data.category
 					? String(
 							data.category,
 						)
 					: undefined,
+
 			active:
 				data.active === undefined
 					? true
@@ -1094,13 +1173,9 @@ async function getBusinessProducts(
 	return products;
 }
 
-// ===========================================================================
-// WHATSAPP
-// ===========================================================================
-
-// ---------------------------------------------------------------------------
-// Meta webhook verification
-// ---------------------------------------------------------------------------
+// ============================================================================
+// WHATSAPP WEBHOOK VERIFICATION
+// ============================================================================
 
 app.get("/webhook", async (c) => {
 	const mode =
@@ -1121,9 +1196,8 @@ app.get("/webhook", async (c) => {
 		{
 			mode,
 			hasToken: Boolean(token),
-			hasChallenge: Boolean(
-				challenge,
-			),
+			hasChallenge:
+				Boolean(challenge),
 		},
 	);
 
@@ -1136,9 +1210,10 @@ app.get("/webhook", async (c) => {
 			challenge ?? "",
 			{
 				status: 200,
+
 				headers: {
 					"Content-Type":
-						"text/plain",
+						"text/plain; charset=utf-8",
 				},
 			},
 		);
@@ -1152,9 +1227,9 @@ app.get("/webhook", async (c) => {
 	);
 });
 
-// ---------------------------------------------------------------------------
-// HMAC SHA-256 validation
-// ---------------------------------------------------------------------------
+// ============================================================================
+// META SIGNATURE
+// ============================================================================
 
 async function verifyMetaSignature(
 	request: Request,
@@ -1170,7 +1245,11 @@ async function verifyMetaSignature(
 		return false;
 	}
 
-	if (!signature.startsWith("sha256=")) {
+	if (
+		!signature.startsWith(
+			"sha256=",
+		)
+	) {
 		return false;
 	}
 
@@ -1204,8 +1283,10 @@ async function verifyMetaSignature(
 		Array.from(
 			new Uint8Array(signed),
 		)
-			.map((b) =>
-				b.toString(16).padStart(2, "0"),
+			.map((byte) =>
+				byte
+					.toString(16)
+					.padStart(2, "0"),
 			)
 			.join("");
 
@@ -1231,9 +1312,9 @@ async function verifyMetaSignature(
 	return difference === 0;
 }
 
-// ---------------------------------------------------------------------------
-// Text normalization
-// ---------------------------------------------------------------------------
+// ============================================================================
+// TEXT NORMALIZATION
+// ============================================================================
 
 function normalizeText(
 	text: string,
@@ -1253,9 +1334,9 @@ function normalizeText(
 		.trim();
 }
 
-// ---------------------------------------------------------------------------
-// Customer message parser
-// ---------------------------------------------------------------------------
+// ============================================================================
+// MESSAGE PARSER
+// ============================================================================
 
 interface ParsedCustomerMessage {
 	productText: string;
@@ -1272,6 +1353,7 @@ function parseCustomerMessage(
 
 	const quantityPatterns = [
 		/\b(\d+)\s*(?:x|pcs?|pieces?|units?|unites?)\b/i,
+
 		/\b(?:qty|quantity|quantite)\s*[:=]?\s*(\d+)\b/i,
 	];
 
@@ -1340,9 +1422,9 @@ function parseCustomerMessage(
 	};
 }
 
-// ---------------------------------------------------------------------------
-// Find product
-// ---------------------------------------------------------------------------
+// ============================================================================
+// FIND PRODUCT
+// ============================================================================
 
 function findProduct(
 	products: Product[],
@@ -1416,9 +1498,9 @@ function findProduct(
 	return best;
 }
 
-// ===========================================================================
-// FIRESTORE ORDERS
-// ===========================================================================
+// ============================================================================
+// FIRESTORE ORDER
+// ============================================================================
 
 async function createFirestoreOrder(
 	env: Env,
@@ -1446,6 +1528,7 @@ async function createFirestoreOrder(
 			`orders?documentId=${encodeURIComponent(id)}`,
 			{
 				method: "POST",
+
 				body: JSON.stringify({
 					fields,
 				}),
@@ -1464,9 +1547,9 @@ async function createFirestoreOrder(
 	return id;
 }
 
-// ---------------------------------------------------------------------------
-// Duplicate order check
-// ---------------------------------------------------------------------------
+// ============================================================================
+// DUPLICATE ORDER
+// ============================================================================
 
 async function hasExistingOrder(
 	env: Env,
@@ -1479,6 +1562,7 @@ async function hasExistingOrder(
 			"orders:runQuery",
 			{
 				method: "POST",
+
 				body: JSON.stringify({
 					structuredQuery: {
 						from: [
@@ -1487,10 +1571,11 @@ async function hasExistingOrder(
 									"orders",
 							},
 						],
+
 						where: {
 							compositeFilter: {
-								op:
-									"AND",
+								op: "AND",
+
 								filters: [
 									{
 										fieldFilter: {
@@ -1498,22 +1583,27 @@ async function hasExistingOrder(
 												fieldPath:
 													"ownerId",
 											},
+
 											op:
 												"EQUAL",
+
 											value: {
 												stringValue:
 													businessId,
 											},
 										},
 									},
+
 									{
 										fieldFilter: {
 											field: {
 												fieldPath:
 													"whatsappMessageId",
 											},
+
 											op:
 												"EQUAL",
+
 											value: {
 												stringValue:
 													messageId,
@@ -1523,6 +1613,7 @@ async function hasExistingOrder(
 								],
 							},
 						},
+
 						limit: 1,
 					},
 				}),
@@ -1544,13 +1635,14 @@ async function hasExistingOrder(
 		}>;
 
 	return rows.some(
-		(row) => Boolean(row.document),
+		(row) =>
+			Boolean(row.document),
 	);
 }
 
-// ===========================================================================
-// WHATSAPP SEND MESSAGE
-// ===========================================================================
+// ============================================================================
+// SEND WHATSAPP MESSAGE
+// ============================================================================
 
 async function sendWhatsAppMessage(
 	env: Env,
@@ -1581,20 +1673,27 @@ async function sendWhatsAppMessage(
 			`https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`,
 			{
 				method: "POST",
+
 				headers: {
 					Authorization:
 						`Bearer ${env.META_ACCESS_TOKEN}`,
+
 					"Content-Type":
 						"application/json",
 				},
+
 				body: JSON.stringify({
 					messaging_product:
 						"whatsapp",
+
 					to,
+
 					type: "text",
+
 					text: {
 						preview_url:
 							false,
+
 						body: text,
 					},
 				}),
@@ -1611,15 +1710,279 @@ async function sendWhatsAppMessage(
 	}
 }
 
-// ===========================================================================
+// ============================================================================
+// PROCESS WHATSAPP MESSAGE
+// ============================================================================
+
+async function processWhatsAppMessage(
+	env: Env,
+	message: any,
+	value: any,
+): Promise<void> {
+	const messageId =
+		String(
+			message?.id ?? "",
+		);
+
+	const from =
+		String(
+			message?.from ?? "",
+		);
+
+	if (!messageId || !from) {
+		return;
+	}
+
+	if (
+		message?.type !== "text"
+	) {
+		console.log(
+			"Ignored non-text WhatsApp message:",
+			message?.type,
+		);
+
+		return;
+	}
+
+	const customerText =
+		String(
+			message?.text?.body ?? "",
+		).trim();
+
+	if (!customerText) {
+		return;
+	}
+
+	const businessId =
+		env.BUSINESS_ID;
+
+	if (!businessId) {
+		throw new Error(
+			"BUSINESS_ID is missing",
+		);
+	}
+
+	const duplicate =
+		await hasExistingOrder(
+			env,
+			businessId,
+			messageId,
+		);
+
+	if (duplicate) {
+		console.log(
+			"Duplicate WhatsApp message ignored:",
+			messageId,
+		);
+
+		return;
+	}
+
+	const business =
+		await getBusinessDocument(
+			businessId,
+			env,
+		);
+
+	if (!business) {
+		throw new Error(
+			`Business not found: ${businessId}`,
+		);
+	}
+
+	if (
+		business.active === false
+	) {
+		await sendWhatsAppMessage(
+			env,
+			from,
+			"Sorry, this business is currently unavailable.",
+		);
+
+		return;
+	}
+
+	const products =
+		await getBusinessProducts(
+			businessId,
+			env,
+		);
+
+	const activeProducts =
+		products.filter(
+			(product) =>
+				product.active !== false,
+		);
+
+	if (
+		activeProducts.length === 0
+	) {
+		await sendWhatsAppMessage(
+			env,
+			from,
+			"Sorry, there are currently no products available.",
+		);
+
+		return;
+	}
+
+	const parsed =
+		parseCustomerMessage(
+			customerText,
+		);
+
+	const product =
+		findProduct(
+			activeProducts,
+			parsed.productText,
+		);
+
+	if (!product) {
+		const list =
+			activeProducts
+				.slice(0, 10)
+				.map(
+					(item) =>
+						`• ${item.name} — ${item.price}`,
+				)
+				.join("\n");
+
+		await sendWhatsAppMessage(
+			env,
+			from,
+			`Hello! 👋\n\nI couldn't find that product.\n\nAvailable products:\n${list}\n\nExample: "2 Oil Change"`,
+		);
+
+		return;
+	}
+
+	if (
+		!Number.isFinite(
+			product.stock,
+		) ||
+		product.stock <= 0
+	) {
+		await sendWhatsAppMessage(
+			env,
+			from,
+			`Sorry, "${product.name}" is currently out of stock.`,
+		);
+
+		return;
+	}
+
+	if (
+		parsed.quantity >
+		product.stock
+	) {
+		await sendWhatsAppMessage(
+			env,
+			from,
+			`Sorry, "${product.name}" has only ${product.stock} available. You requested ${parsed.quantity}.`,
+		);
+
+		return;
+	}
+
+	const total =
+		product.price *
+		parsed.quantity;
+
+	const orderId =
+		await createFirestoreOrder(
+			env,
+			{
+				ownerId:
+					businessId,
+
+				businessId:
+					businessId,
+
+				businessName:
+					String(
+						business.name ??
+							"",
+					),
+
+				customerWhatsapp:
+					from,
+
+				customerName:
+					String(
+						value?.contacts?.[0]
+							?.profile?.name ??
+							"",
+					),
+
+				whatsappMessageId:
+					messageId,
+
+				productId:
+					product.id,
+
+				productName:
+					product.name,
+
+				category:
+					product.category ??
+					"",
+
+				quantity:
+					parsed.quantity,
+
+				unitPrice:
+					product.price,
+
+				total,
+
+				status:
+					"pending",
+
+				source:
+					"whatsapp",
+
+				customerMessage:
+					customerText,
+
+				createdAt:
+					new Date().toISOString(),
+			},
+		);
+
+	const currency =
+		typeof business.currency ===
+		"string"
+			? business.currency
+			: "MAD";
+
+	const reply =
+		`✅ Order received!\n\n` +
+		`Product: ${product.name}\n` +
+		`Quantity: ${parsed.quantity}\n` +
+		`Unit price: ${product.price} ${currency}\n` +
+		`Total: ${total} ${currency}\n\n` +
+		`Order ID: ${orderId}\n` +
+		`Status: Pending\n\n` +
+		`Thank you for contacting ${String(
+			business.name ??
+				"our business",
+		)}.`;
+
+	await sendWhatsAppMessage(
+		env,
+		from,
+		reply,
+	);
+}
+
+// ============================================================================
 // WHATSAPP POST WEBHOOK
-// ===========================================================================
+// ============================================================================
 
 app.post("/webhook", async (c) => {
 	const rawBody =
 		await c.req.text();
 
-	// If META_APP_SECRET exists, validate Meta's signature.
 	if (c.env.META_APP_SECRET) {
 		const valid =
 			await verifyMetaSignature(
@@ -1663,8 +2026,6 @@ app.post("/webhook", async (c) => {
 		JSON.stringify(payload),
 	);
 
-	// Meta expects a quick 200.
-	// We still process the event here.
 	if (
 		payload?.object !==
 		"whatsapp_business_account"
@@ -1695,7 +2056,9 @@ app.post("/webhook", async (c) => {
 				const value =
 					change?.value;
 
-				if (!value) continue;
+				if (!value) {
+					continue;
+				}
 
 				const messages =
 					Array.isArray(
@@ -1718,9 +2081,6 @@ app.post("/webhook", async (c) => {
 			"WhatsApp processing error:",
 			error,
 		);
-
-		// Still return 200 to Meta so it doesn't
-		// continuously retry the same webhook.
 	}
 
 	return c.json({
@@ -1728,295 +2088,9 @@ app.post("/webhook", async (c) => {
 	});
 });
 
-// ---------------------------------------------------------------------------
-// Process WhatsApp message
-// ---------------------------------------------------------------------------
-
-async function processWhatsAppMessage(
-	env: Env,
-	message: any,
-	value: any,
-): Promise<void> {
-	const messageId =
-		String(
-			message?.id ?? "",
-		);
-
-	const from =
-		String(
-			message?.from ?? "",
-		);
-
-	if (!messageId || !from) {
-		return;
-	}
-
-	// Only process text messages for now.
-	if (
-		message?.type !== "text"
-	) {
-		console.log(
-			"Ignored non-text WhatsApp message:",
-			message?.type,
-		);
-
-		return;
-	}
-
-	const customerText =
-		String(
-			message?.text?.body ?? "",
-		).trim();
-
-	if (!customerText) {
-		return;
-	}
-
-	const businessId =
-		env.BUSINESS_ID;
-
-	if (!businessId) {
-		throw new Error(
-			"BUSINESS_ID is missing",
-		);
-	}
-
-	// Duplicate protection.
-	const duplicate =
-		await hasExistingOrder(
-			env,
-			businessId,
-			messageId,
-		);
-
-	if (duplicate) {
-		console.log(
-			"Duplicate WhatsApp message ignored:",
-			messageId,
-		);
-
-		return;
-	}
-
-	// Load business.
-	const business =
-		await getBusinessDocument(
-			businessId,
-			env,
-		);
-
-	if (!business) {
-		throw new Error(
-			`Business not found: ${businessId}`,
-		);
-	}
-
-	// Make sure business is active.
-	if (
-		business.active === false
-	) {
-		await sendWhatsAppMessage(
-			env,
-			from,
-			"Sorry, this business is currently unavailable.",
-		);
-
-		return;
-	}
-
-	// Load products.
-	const products =
-		await getBusinessProducts(
-			businessId,
-			env,
-		);
-
-	const activeProducts =
-		products.filter(
-			(product) =>
-				product.active !== false,
-		);
-
-	if (
-		activeProducts.length === 0
-	) {
-		await sendWhatsAppMessage(
-			env,
-			from,
-			"Sorry, there are currently no products available.",
-		);
-
-		return;
-	}
-
-	const parsed =
-		parseCustomerMessage(
-			customerText,
-		);
-
-	const product =
-		findProduct(
-			activeProducts,
-			parsed.productText,
-		);
-
-	// -----------------------------------------------------------------------
-	// Product not found
-	// -----------------------------------------------------------------------
-
-	if (!product) {
-		const list =
-			activeProducts
-				.slice(0, 10)
-				.map(
-					(item) =>
-						`• ${item.name} — ${item.price}`,
-				)
-				.join("\n");
-
-		await sendWhatsAppMessage(
-			env,
-			from,
-			`Hello! 👋\n\nI couldn't find that product.\n\nAvailable products:\n${list}\n\nExample: "2 Oil Change"`,
-		);
-
-		return;
-	}
-
-	// -----------------------------------------------------------------------
-	// Stock check
-	// -----------------------------------------------------------------------
-
-	if (
-		!Number.isFinite(
-			product.stock,
-		) ||
-		product.stock <= 0
-	) {
-		await sendWhatsAppMessage(
-			env,
-			from,
-			`Sorry, "${product.name}" is currently out of stock.`,
-		);
-
-		return;
-	}
-
-	if (
-		parsed.quantity >
-		product.stock
-	) {
-		await sendWhatsAppMessage(
-			env,
-			from,
-			`Sorry, "${product.name}" has only ${product.stock} available. You requested ${parsed.quantity}.`,
-		);
-
-		return;
-	}
-
-	// -----------------------------------------------------------------------
-	// Create order
-	// -----------------------------------------------------------------------
-
-	const total =
-		product.price *
-		parsed.quantity;
-
-	const orderId =
-		await createFirestoreOrder(
-			env,
-			{
-				ownerId:
-					businessId,
-
-				businessId:
-					businessId,
-
-				businessName:
-					String(
-						business.name ??
-						"",
-					),
-
-				customerWhatsapp:
-					from,
-
-				customerName:
-					String(
-						value?.contacts?.[0]
-							?.profile?.name ??
-						"",
-					),
-
-				whatsappMessageId:
-					messageId,
-
-				productId:
-					product.id,
-
-				productName:
-					product.name,
-
-				category:
-					product.category ??
-					"",
-
-				quantity:
-					parsed.quantity,
-
-				unitPrice:
-					product.price,
-
-				total,
-
-				status:
-					"pending",
-
-				source:
-					"whatsapp",
-
-				customerMessage:
-					customerText,
-
-				createdAt:
-					new Date().toISOString(),
-			},
-		);
-
-	// -----------------------------------------------------------------------
-	// Reply
-	// -----------------------------------------------------------------------
-
-	const currency =
-		typeof business.currency ===
-		"string"
-			? business.currency
-			: "MAD";
-
-	const reply =
-		`✅ Order received!\n\n` +
-		`Product: ${product.name}\n` +
-		`Quantity: ${parsed.quantity}\n` +
-		`Unit price: ${product.price} ${currency}\n` +
-		`Total: ${total} ${currency}\n\n` +
-		`Order ID: ${orderId}\n` +
-		`Status: Pending\n\n` +
-		`Thank you for contacting ${String(
-			business.name ??
-				"our business",
-		)}.`;
-
-	await sendWhatsAppMessage(
-		env,
-		from,
-		reply,
-	);
-}
-
-// ===========================================================================
-// OPTIONAL WEB BOT AUTH
-// ===========================================================================
+// ============================================================================
+// WEB BOT AUTH
+// ============================================================================
 
 app.get(
 	"/.well-known/web-bot-auth/directory",
@@ -2062,23 +2136,25 @@ app.all(
 	},
 );
 
-// ===========================================================================
-// Root / health check
-// ===========================================================================
+// ============================================================================
+// ROOT
+// ============================================================================
 
 app.get("/", (c) => {
 	return c.json({
 		ok: true,
+
 		service:
 			"Agent Visibility Worker + WhatsApp AI",
+
 		webhook:
 			"/webhook",
 	});
 });
 
-// ===========================================================================
+// ============================================================================
 // 404
-// ===========================================================================
+// ============================================================================
 
 app.notFound((c) => {
 	return c.json(
@@ -2091,4 +2167,3 @@ app.notFound((c) => {
 });
 
 export default app;
-```
