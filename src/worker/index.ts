@@ -947,8 +947,15 @@ async function firestoreRequest(
 	const token =
 		await getFirebaseAccessToken(env);
 
+	const base =
+		`https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents`;
+
+	const url = path.endsWith(":runQuery")
+		? `${base}:runQuery`
+		: `${base}/${path}`;
+
 	return fetch(
-		`https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${path}`,
+		url,
 		{
 			...options,
 
@@ -964,7 +971,6 @@ async function firestoreRequest(
 		},
 	);
 }
-
 // ============================================================================
 // BUSINESS
 // ============================================================================
