@@ -2070,11 +2070,20 @@ app.post("/webhook", async (c) => {
 			}
 		}
 	} catch (error) {
-		console.error(
-			"WhatsApp processing error:",
-			error,
-		);
-	}
+    console.error(
+        "WhatsApp processing error:",
+        error instanceof Error
+            ? error.message
+            : String(error)
+    );
+
+    console.error(
+        "WhatsApp processing stack:",
+        error instanceof Error
+            ? error.stack
+            : "no stack"
+    );
+}
 
 	return c.json({
 		ok: true,
